@@ -22,3 +22,7 @@ python -m pip install pandas numpy scikit-learn joblib xgboost
 python -m pip install imbalanced-learn
 
 python -m pip uninstall -y scikit-learn imbalanced-learn
+
+python -m pip install matplotlib
+
+python -m pip install reportlab
