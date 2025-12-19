@@ -193,6 +193,17 @@ class MainWindow(QMainWindow):
                 border-radius: 8px;
             }
             
+            QComboBox {
+                padding: 6px;
+                border-radius: 6px;
+                border: 1px solid #0B4F95;
+            }
+
+            QComboBox:hover {
+                border: 1px solid #4A90E2;
+            }
+
+            
 
             """)
 
