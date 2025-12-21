@@ -35,7 +35,7 @@ class TabModelo(QWidget):
         self.cargar_artifactos()
 
         # ===============================
-        # Inputs dinámicos (TODOS COMBO)
+        # Inputs
         # ===============================
         self.inputs = {}
         self.crear_inputs()
@@ -75,13 +75,11 @@ class TabModelo(QWidget):
         data_path = os.path.join(base_dir, "data", "dataset_eda.csv")
         self.df_ref = pd.read_csv(data_path)
 
-
     # ==================================================
-    # Crear ComboBox numérico inteligente
+    # Crear ComboBox numérico genérico (si hiciera falta)
     # ==================================================
     def _crear_combo_numerico(self, col):
         combo = QComboBox()
-
         valores = (
             self.df_ref[col]
             .dropna()
@@ -91,36 +89,58 @@ class TabModelo(QWidget):
             .tolist()
         )
 
-        # Si hay demasiados valores → rangos
-        if len(valores) > 20:
-            min_v, max_v = min(valores), max(valores)
-            paso = max(1, (max_v - min_v) // 6)
-
-            rangos = [
-                f"{i} - {min(i + paso - 1, max_v)}"
-                for i in range(min_v, max_v + 1, paso)
-            ]
-            combo.addItems(rangos)
-            combo.setProperty("es_rango", True)
-        else:
-            combo.addItems([str(v) for v in valores])
-            combo.setProperty("es_rango", False)
-
+        combo.addItems([str(v) for v in valores[:20]])
         combo.setCurrentIndex(-1)
         return combo
 
     # ==================================================
-    # Crear inputs automáticamente
+    # Crear inputs (DOMINIO CONTROLADO)
     # ==================================================
     def crear_inputs(self):
         for col in self.columnas_modelo:
 
-            # ----------------------------
-            # CATEGÓRICAS
-            # ----------------------------
-            if col in self.cat_features:
-                combo = QComboBox()
+            # ==================================================
+            # CASOS ESPECIALES
+            # ==================================================
 
+            # Año de bachillerato
+            if col == "ANIO_BACHILLERATO":
+                combo = QComboBox()
+                combo.addItems([str(a) for a in range(1995, 2011)])
+                combo.setCurrentIndex(-1)
+                self.form.addRow(QLabel(col), combo)
+                self.inputs[col] = combo
+
+            # Años post bachillerato
+            elif col == "ANIOS_POST_BACH":
+                combo = QComboBox()
+                combo.addItems(["0", "1", "2", "3", "4", "5"])
+                combo.setCurrentIndex(-1)
+                self.form.addRow(QLabel(col), combo)
+                self.inputs[col] = combo
+
+            # Tasa de aprobación del colegio (rangos semánticos)
+            elif col == "TASA_APR_COLEGIO":
+                combo = QComboBox()
+                opciones = {
+                    "Muy baja (≤ 20%)": 0.20,
+                    "Baja (20% – 35%)": 0.30,
+                    "Media (35% – 50%)": 0.45,
+                    "Alta (50% – 70%)": 0.60,
+                    "Muy alta (≥ 70%)": 0.75,
+                }
+                for texto, valor in opciones.items():
+                    combo.addItem(texto, valor)
+
+                combo.setCurrentIndex(-1)
+                self.form.addRow(QLabel(col), combo)
+                self.inputs[col] = combo
+
+            # ==================================================
+            # VARIABLES CATEGÓRICAS
+            # ==================================================
+            elif col in self.cat_features:
+                combo = QComboBox()
                 valores = (
                     self.df_ref[col]
                     .dropna()
@@ -129,16 +149,14 @@ class TabModelo(QWidget):
                     .unique()
                     .tolist()
                 )
-
                 combo.addItems(valores)
                 combo.setCurrentIndex(-1)
-
                 self.form.addRow(QLabel(col), combo)
                 self.inputs[col] = combo
 
-            # ----------------------------
-            # NUMÉRICAS (también ComboBox)
-            # ----------------------------
+            # ==================================================
+            # NUMÉRICAS RESTANTES (si existiera alguna)
+            # ==================================================
             elif col in self.num_features:
                 combo = self._crear_combo_numerico(col)
                 self.form.addRow(QLabel(col), combo)
@@ -152,37 +170,37 @@ class TabModelo(QWidget):
             datos = {}
 
             for col, widget in self.inputs.items():
-                texto = widget.currentText()
-
-                if texto == "":
+                if widget.currentIndex() == -1:
                     raise ValueError(f"Seleccione un valor para {col}")
 
-                # Rango → tomar valor inicial
-                if widget.property("es_rango"):
-                    valor = int(texto.split("-")[0].strip())
+                if col == "TASA_APR_COLEGIO":
+                    valor = widget.currentData()
                 else:
-                    # numérico o categórico
-                    if col in self.num_features:
-                        valor = float(texto)
-                    else:
-                        valor = texto
+                    texto = widget.currentText()
+                    valor = float(texto) if col in self.num_features else texto
 
                 datos[col] = valor
 
             df = pd.DataFrame([datos])
             df = df.reindex(columns=self.columnas_modelo, fill_value=0)
 
+            # ===== PREDICCIÓN =====
             pred = self.modelo.predict(df)[0]
+            proba = (
+                self.modelo.predict_proba(df)[0][1]
+                if hasattr(self.modelo, "predict_proba")
+                else None
+            )
 
-            if hasattr(self.modelo, "predict_proba"):
-                proba = self.modelo.predict_proba(df)[0][1]
-            else:
-                proba = None
-
+            # ===== MOSTRAR RESULTADO =====
             self.mostrar_resultado(pred, proba)
+
+            # ===== 🔗 ENVIAR DATOS AL PERFIL ESTADÍSTICO =====
+            self.tab_perfil.actualizar_perfil(datos, proba)
 
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
+
 
     # ==================================================
     # Mostrar resultado

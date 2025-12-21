@@ -1,18 +1,31 @@
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QTabWidget
 )
+
 from ui.tab_eda import TabEDA
 from ui.tab_modelo import TabModelo
+from ui.tab_perfil_est import TabPerfilEst
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Sistema de Predicción Universitaria")
-        self.setGeometry(100, 100, 900, 600)
 
+        # ==============================
+        # Ventana principal
+        # ==============================
+        self.setWindowTitle("Sistema de Predicción Universitaria")
+        self.setGeometry(100, 100, 1100, 700)
+
+        # ==============================
+        # Tabs
+        # ==============================
         self.tabs = QTabWidget()
+
+        # ==============================
+        # Estilos globales
+        # ==============================
         self.tabs.setStyleSheet("""
-                  
             QWidget {
                 font-family: "Segoe UI";
                 font-size: 13px;
@@ -20,9 +33,6 @@ class MainWindow(QMainWindow):
                 background-color: #FFFFFF;
             }
 
-            /* ==============================
-            TÍTULOS
-            ============================== */
             QLabel {
                 color: #0B4F95;
             }
@@ -39,9 +49,6 @@ class MainWindow(QMainWindow):
                 color: #CDA34F;
             }
 
-            /* ==============================
-            BOTONES
-            ============================== */
             QPushButton {
                 background-color: #0B4F95;
                 color: white;
@@ -58,7 +65,6 @@ class MainWindow(QMainWindow):
                 background-color: #083b70;
             }
 
-            /* Botón secundario */
             QPushButton#secundario {
                 background-color: #CDA34F;
                 color: #1F1F1F;
@@ -68,9 +74,6 @@ class MainWindow(QMainWindow):
                 background-color: #b8933e;
             }
 
-            /* ==============================
-            TAB WIDGET (NAVEGACIÓN)
-            ============================== */
             QTabWidget::pane {
                 border: none;
             }
@@ -78,7 +81,7 @@ class MainWindow(QMainWindow):
             QTabBar::tab {
                 background: #F4F6F8;
                 color: #0B4F95;
-                padding: 10px 20px;
+                padding: 10px 22px;
                 margin-right: 3px;
                 border-top-left-radius: 10px;
                 border-top-right-radius: 10px;
@@ -95,9 +98,6 @@ class MainWindow(QMainWindow):
                 color: white;
             }
 
-            /* ==============================
-            TARJETAS / CONTENEDORES
-            ============================== */
             QFrame#card {
                 background-color: #FFFFFF;
                 border: 2px solid #0B4F95;
@@ -105,9 +105,6 @@ class MainWindow(QMainWindow):
                 padding: 20px;
             }
 
-            /* ==============================
-            FORMULARIOS
-            ============================== */
             QLineEdit, QComboBox {
                 background-color: #FFFFFF;
                 border: 1px solid #B0B0B0;
@@ -119,9 +116,6 @@ class MainWindow(QMainWindow):
                 border: 1px solid #0B4F95;
             }
 
-            /* ==============================
-            GROUPBOX (EDA SECCIONES)
-            ============================== */
             QGroupBox {
                 border: 2px solid #0B4F95;
                 border-radius: 10px;
@@ -137,9 +131,6 @@ class MainWindow(QMainWindow):
                 background-color: #FFFFFF;
             }
 
-            /* ==============================
-            TABLAS
-            ============================== */
             QTableWidget {
                 background-color: #FFFFFF;
                 alternate-background-color: #F4F6F8;
@@ -154,13 +145,9 @@ class MainWindow(QMainWindow):
                 font-weight: bold;
             }
 
-            /* ==============================
-            SCROLLBARS
-            ============================== */
             QScrollBar:vertical {
                 background: #F4F6F8;
                 width: 12px;
-                margin: 0px;
             }
 
             QScrollBar::handle:vertical {
@@ -172,9 +159,6 @@ class MainWindow(QMainWindow):
                 background: #4A90E2;
             }
 
-            /* ==============================
-            RESULTADO MODELO
-            ============================== */
             QLabel#resultadoAprobado {
                 background-color: #E6F4EA;
                 color: #1E7E34;
@@ -192,30 +176,33 @@ class MainWindow(QMainWindow):
                 padding: 10px;
                 border-radius: 8px;
             }
-            
-            QComboBox {
-                padding: 6px;
-                border-radius: 6px;
-                border: 1px solid #0B4F95;
-            }
+        """)
 
-            QComboBox:hover {
-                border: 1px solid #4A90E2;
-            }
+        # ==============================
+        # Crear instancias de los tabs
+        # ==============================
+        self.tab_eda = TabEDA()
+        self.tab_modelo = TabModelo()
+        self.tab_perfil = TabPerfilEst()
 
-            
+        # ==============================
+        # Agregar tabs
+        # ==============================
+        self.tabs.addTab(self.tab_eda, "EDA")
+        self.tabs.addTab(self.tab_modelo, "Modelo Predictivo")
+        self.tabs.addTab(self.tab_perfil, "Perfil Estadístico")
 
-            """)
+        # ==============================
+        # Conectar tabs entre sí
+        # ==============================
+        self.tab_modelo.tab_perfil = self.tab_perfil
+        self.tab_modelo.tabs_widget = self.tabs
 
-
-
-        self.tabs.addTab(TabEDA(), "EDA")
-        self.tabs.addTab(TabModelo(), "Modelo Predictivo")
-
+        # ==============================
+        # Layout central
+        # ==============================
         container = QWidget()
-        layout = QVBoxLayout()
+        layout = QVBoxLayout(container)
         layout.addWidget(self.tabs)
-        container.setLayout(layout)
 
         self.setCentralWidget(container)
-        
