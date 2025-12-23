@@ -9,14 +9,43 @@ from PyQt6.QtWidgets import (
     QHBoxLayout, QFrame
 )
 
+# ===============================
+# Etiquetas amigables
+# ===============================
+ETIQUETAS_COLUMNAS = {
+    "PERIODO": "Período de la gestión académica",
+    "SEXO": "Género del postulante",
+    "OPC_INGRESO": "Opción de ingreso",
+    "CIUDAD_COLEGIO": "Ciudad del colegio",
+    "PROVINCIA_COLEGIO": "Provincia del colegio",
+    "ANIO_BACHILLERATO": "Año de egreso de bachillerato",
+    "MUNICIPIO": "Municipio de residencia",
+    "NACIONALIDAD": "Nacionalidad",
+    "ESTADO_CIVIL": "Estado civil",
+    "EDAD": "Edad del postulante en el examen",
+    "ANIOS_POST_BACH": "Años posteriores al bachillerato",
+    "TRABAJO_COLEGIO": "Tipo de colegio",
+    "MAYOR_EDAD": "Mayor de edad",
+    "MIGRA_UNIVERSIDAD": "Migración universitaria previa",
+}
+NUMERICAS_MODELO = {
+    "PERIODO",
+    "OPC_INGRESO",
+    "EDAD",
+    "ANIO_BACHILLERATO",
+    "ANIOS_POST_BACH",
+    "MAYOR_EDAD",
+    "MIGRA_UNIVERSIDAD",
+    "TASA_APR_COLEGIO",
+
+}
+
 
 class TabModelo(QWidget):
     def __init__(self):
         super().__init__()
 
-        # ===============================
-        # Layout principal centrado
-        # ===============================
+        # Layout centrado
         self.main_layout = QHBoxLayout()
         self.card = QFrame()
         self.card.setObjectName("card")
@@ -29,27 +58,21 @@ class TabModelo(QWidget):
         self.main_layout.addWidget(self.card)
         self.main_layout.addStretch()
 
-        # ===============================
-        # Cargar artefactos
-        # ===============================
         self.cargar_artifactos()
 
-        # ===============================
-        # Inputs
-        # ===============================
         self.inputs = {}
         self.crear_inputs()
 
-        # ===============================
-        # Botón predecir
-        # ===============================
+        # Info tasa colegio
+        self.label_tasa_info = QLabel("Tasa de aprobación del colegio: ---")
+        self.layout.addWidget(self.label_tasa_info)
+
+        # Botón
         self.btn_predecir = QPushButton("Predecir Resultado")
         self.btn_predecir.clicked.connect(self.predecir)
         self.layout.addWidget(self.btn_predecir)
 
-        # ===============================
         # Resultado
-        # ===============================
         self.label_resultado = QLabel("Resultado: ---")
         self.layout.addWidget(self.label_resultado)
 
@@ -57,9 +80,21 @@ class TabModelo(QWidget):
         self.aplicar_estilos()
 
     # ==================================================
-    # Cargar modelo y metadatos
+    # Cargar modelo y datos
     # ==================================================
     def cargar_artifactos(self):
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        data_path = os.path.join(base_dir, "data", "dataset_eda.csv")
+        self.df_ref = pd.read_csv(data_path)
+
+        # 🔹 Tasa de aprobación por colegio (APR = aprobado)
+        self.tasa_por_colegio = (
+            self.df_ref
+            .groupby("NOMBRE_COLEGIO")["RESULTADO_FINAL"]
+            .apply(lambda x: (x == "APR").mean())
+            .to_dict()
+        )
+
         self.modelo = joblib.load("model/modelo_XGBOOST.joblib")
 
         with open("model/columnas_modelo.pkl", "rb") as f:
@@ -68,78 +103,76 @@ class TabModelo(QWidget):
         with open("model/cat_features.pkl", "rb") as f:
             self.cat_features = pickle.load(f)
 
-        with open("model/num_features.pkl", "rb") as f:
-            self.num_features = pickle.load(f)
-
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        data_path = os.path.join(base_dir, "data", "dataset_eda.csv")
-        self.df_ref = pd.read_csv(data_path)
+        self.tasa_actual = 0.0
 
     # ==================================================
-    # Crear ComboBox numérico genérico (si hiciera falta)
+    # Crear inputs
     # ==================================================
-    def _crear_combo_numerico(self, col):
-        combo = QComboBox()
-        valores = (
-            self.df_ref[col]
+    def crear_inputs(self):
+        
+
+        # 🔹 Nombre del colegio (auxiliar)
+        combo_colegio = QComboBox()
+        colegios = sorted(
+            self.df_ref["NOMBRE_COLEGIO"]
             .dropna()
-            .astype(int)
-            .sort_values()
+            .astype(str)
             .unique()
             .tolist()
         )
+        combo_colegio.addItems(colegios)
+        combo_colegio.setCurrentIndex(-1)
+        combo_colegio.currentTextChanged.connect(self.actualizar_tasa_colegio)
 
-        combo.addItems([str(v) for v in valores[:20]])
-        combo.setCurrentIndex(-1)
-        return combo
+        self.form.addRow(QLabel("Nombre del colegio"), combo_colegio)
+        self.combo_colegio = combo_colegio  # no va al modelo
 
-    # ==================================================
-    # Crear inputs (DOMINIO CONTROLADO)
-    # ==================================================
-    def crear_inputs(self):
+        # 🔹 Variables reales del modelo
         for col in self.columnas_modelo:
+            # ❌ VARIABLES QUE NO SE MUESTRAN
+            if col in ["RESULTADO_FINAL", "AREA_CARRERA"]:
+                continue
 
-            # ==================================================
-            # CASOS ESPECIALES
-            # ==================================================
+            
+        # ❌ VARIABLES QUE NO SE MUESTRAN
+            if col in ["RESULTADO_FINAL", "AREA_CARRERA"]:
+                continue
 
-            # Año de bachillerato
+            if col == "TASA_APR_COLEGIO":
+                continue  # NO se muestra
+
+            label = ETIQUETAS_COLUMNAS.get(col, col)
+
+
+
             if col == "ANIO_BACHILLERATO":
                 combo = QComboBox()
                 combo.addItems([str(a) for a in range(1995, 2011)])
                 combo.setCurrentIndex(-1)
-                self.form.addRow(QLabel(col), combo)
-                self.inputs[col] = combo
+            
+            elif col == "EDAD":
+                combo = QComboBox()
+                combo.addItems([str(e) for e in range(15, 43)])
+                combo.setCurrentIndex(-1)
 
-            # Años post bachillerato
             elif col == "ANIOS_POST_BACH":
                 combo = QComboBox()
                 combo.addItems(["0", "1", "2", "3", "4", "5"])
                 combo.setCurrentIndex(-1)
-                self.form.addRow(QLabel(col), combo)
-                self.inputs[col] = combo
 
-            # Tasa de aprobación del colegio (rangos semánticos)
-            elif col == "TASA_APR_COLEGIO":
+            elif col == "MAYOR_EDAD":
                 combo = QComboBox()
-                opciones = {
-                    "Muy baja (≤ 20%)": 0.20,
-                    "Baja (20% – 35%)": 0.30,
-                    "Media (35% – 50%)": 0.45,
-                    "Alta (50% – 70%)": 0.60,
-                    "Muy alta (≥ 70%)": 0.75,
-                }
-                for texto, valor in opciones.items():
-                    combo.addItem(texto, valor)
-
+                combo.addItem("No", 0)
+                combo.addItem("Sí", 1)
                 combo.setCurrentIndex(-1)
-                self.form.addRow(QLabel(col), combo)
-                self.inputs[col] = combo
 
-            # ==================================================
-            # VARIABLES CATEGÓRICAS
-            # ==================================================
-            elif col in self.cat_features:
+            elif col == "MIGRA_UNIVERSIDAD":
+                combo = QComboBox()
+                combo.addItem("No", 0)
+                combo.addItem("Sí", 1)
+                combo.setCurrentIndex(-1)
+
+            else:
                 combo = QComboBox()
                 valores = (
                     self.df_ref[col]
@@ -151,16 +184,25 @@ class TabModelo(QWidget):
                 )
                 combo.addItems(valores)
                 combo.setCurrentIndex(-1)
-                self.form.addRow(QLabel(col), combo)
-                self.inputs[col] = combo
 
-            # ==================================================
-            # NUMÉRICAS RESTANTES (si existiera alguna)
-            # ==================================================
-            elif col in self.num_features:
-                combo = self._crear_combo_numerico(col)
-                self.form.addRow(QLabel(col), combo)
-                self.inputs[col] = combo
+            self.form.addRow(QLabel(label), combo)
+            self.inputs[col] = combo
+
+    # ==================================================
+    # Actualizar tasa
+    # ==================================================
+    def actualizar_tasa_colegio(self, nombre):
+        tasa = self.tasa_por_colegio.get(nombre)
+        if tasa is not None:
+            self.tasa_actual = float(tasa)
+            self.label_tasa_info.setText(
+                f"Tasa de aprobación del colegio: {self.tasa_actual:.2%}"
+            )
+        else:
+            self.tasa_actual = 0.0
+            self.label_tasa_info.setText(
+                "Tasa de aprobación del colegio: No disponible"
+            )
 
     # ==================================================
     # Predicción
@@ -173,48 +215,46 @@ class TabModelo(QWidget):
                 if widget.currentIndex() == -1:
                     raise ValueError(f"Seleccione un valor para {col}")
 
-                if col == "TASA_APR_COLEGIO":
-                    valor = widget.currentData()
-                else:
-                    texto = widget.currentText()
-                    valor = float(texto) if col in self.num_features else texto
+                # Variables binarias
+                if col in ["MAYOR_EDAD", "MIGRA_UNIVERSIDAD"]:
+                    datos[col] = int(widget.currentData())
 
-                datos[col] = valor
+                # Variables numéricas
+                elif col in NUMERICAS_MODELO:
+                    datos[col] = float(widget.currentText())
+
+                # Categóricas
+                else:
+                    datos[col] = widget.currentText()
+
+            # 👉 insertar tasa calculada automáticamente
+            datos["TASA_APR_COLEGIO"] = float(self.tasa_actual)
 
             df = pd.DataFrame([datos])
             df = df.reindex(columns=self.columnas_modelo, fill_value=0)
 
-            # ===== PREDICCIÓN =====
             pred = self.modelo.predict(df)[0]
-            proba = (
-                self.modelo.predict_proba(df)[0][1]
-                if hasattr(self.modelo, "predict_proba")
-                else None
-            )
+            proba = self.modelo.predict_proba(df)[0][1]
 
-            # ===== MOSTRAR RESULTADO =====
             self.mostrar_resultado(pred, proba)
-
-            # ===== 🔗 ENVIAR DATOS AL PERFIL ESTADÍSTICO =====
-            self.tab_perfil.actualizar_perfil(datos, proba)
 
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 
 
+
     # ==================================================
     # Mostrar resultado
     # ==================================================
-    def mostrar_resultado(self, pred, proba=None):
+    def mostrar_resultado(self, pred, proba):
         if pred == 1:
-            color = "#1E7E34"
             texto = "APROBADO ✅"
+            color = "#1E7E34"
         else:
-            color = "#B02A37"
             texto = "NO APROBADO ❌"
+            color = "#B02A37"
 
-        if proba is not None:
-            texto += f"  (Probabilidad: {proba:.2%})"
+        texto += f"  (Probabilidad: {proba:.2%})"
 
         self.label_resultado.setText(texto)
         self.label_resultado.setStyleSheet(
@@ -233,44 +273,26 @@ class TabModelo(QWidget):
     # ==================================================
     def aplicar_estilos(self):
         self.setStyleSheet("""
-            QWidget {
-                font-family: Segoe UI;
-                font-size: 13px;
-            }
-
             QFrame#card {
-                background-color: #ffffff;
+                border: 2px solid #0B4F95;
                 border-radius: 14px;
                 padding: 24px;
                 min-width: 520px;
-                max-width: 650px;
-                border: 2px solid #0B4F95;
             }
-
             QLabel {
-                font-weight: 600;
                 color: #0B4F95;
+                font-weight: 600;
             }
-
             QComboBox {
                 padding: 6px;
                 border-radius: 6px;
                 border: 1px solid #0B4F95;
             }
-
-            QComboBox:hover {
-                border: 1px solid #4A90E2;
-            }
-
             QPushButton {
                 background-color: #0B4F95;
                 color: white;
                 padding: 10px;
                 border-radius: 8px;
                 font-weight: bold;
-            }
-
-            QPushButton:hover {
-                background-color: #4A90E2;
             }
         """)
