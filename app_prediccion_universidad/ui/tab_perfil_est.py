@@ -18,9 +18,22 @@ class TabPerfilEst(QWidget):
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         data_path = os.path.join(base_dir, "data", "dataset_eda.csv")
         self.df = pd.read_csv(data_path)
-        
 
-        # Datos del postulante (se llenan luego)
+        # Normalizar RESULTADO_FINAL
+        self.df["RESULTADO_FINAL"] = self.df["RESULTADO_FINAL"].astype(str)
+
+        # ===============================
+        # Precalcular tasa histórica por colegio
+        # ===============================
+        self.tasa_por_colegio = (
+            self.df
+            .groupby("NOMBRE_COLEGIO")["RESULTADO_FINAL"]
+            .apply(lambda x: (x == "APR").mean())
+        )
+
+        # ===============================
+        # Datos del postulante
+        # ===============================
         self.datos_postulante = None
         self.probabilidad = None
 
@@ -58,16 +71,22 @@ class TabPerfilEst(QWidget):
     def _calcular_estadisticas(self):
         self._limpiar_card()
 
-        # ---------- TASA_APR_COLEGIO ----------
-        tasa = self.datos_postulante["TASA_APR_COLEGIO"]
-        percentil_tasa = (
-            self.df["TASA_APR_COLEGIO"].rank(pct=True) * 100
-        ).loc[self.df["TASA_APR_COLEGIO"] <= tasa].max()
+        nombre_colegio = self.datos_postulante.get("NOMBRE_COLEGIO")
+        tasa_post = self.datos_postulante.get("TASA_APR_COLEGIO", 0.0)
 
-        promedio_tasa = self.df["TASA_APR_COLEGIO"].mean()
+        # ---------- Percentil real ----------
+        tasas_validas = self.tasa_por_colegio.dropna()
 
-        # ---------- ANIOS_POST_BACH ----------
-        anios = self.datos_postulante["ANIOS_POST_BACH"]
+        percentil = (
+            (tasas_validas <= tasa_post).mean() * 100
+            if not tasas_validas.empty
+            else 0
+        )
+
+        promedio_tasa = tasas_validas.mean()
+
+        # ---------- Años post bach ----------
+        anios_post = self.datos_postulante.get("ANIOS_POST_BACH", 0)
         promedio_anios = self.df["ANIOS_POST_BACH"].mean()
 
         # ---------- Nivel de riesgo ----------
@@ -78,32 +97,32 @@ class TabPerfilEst(QWidget):
         else:
             riesgo = "BAJO 🟢"
 
-        # ===============================
+        
         # Mostrar resultados
-        # ===============================
+       
+       
         self._add_item(
-            "Percentil de Tasa de Aprobación del Colegio",
-            f"{percentil_tasa:.1f} %"
+            "Percentil de tasa histórica del colegio",
+            f"{percentil:.1f} %"
         )
 
         self._add_item(
-            "Comparación Tasa de Aprobación",
-            f"Postulante: {tasa:.2f} | Promedio histórico: {promedio_tasa:.2f}"
+            "Comparación de tasa de aprobación",
+            f"Postulante: {tasa_post:.2%} | Promedio histórico: {promedio_tasa:.2%}"
         )
 
         self._add_item(
-            "Comparación Años Post Bachillerato",
-            f"Postulante: {anios} | Promedio histórico: {promedio_anios:.2f}"
+            "Comparación de años post bachillerato",
+            f"Postulante: {anios_post} | Promedio histórico: {promedio_anios:.2f}"
         )
 
         self._add_item(
-            "Nivel de Riesgo Académico",
+            "Nivel de riesgo estimado para rendir el examen",
             riesgo
         )
 
-    # ==================================================
-    # Utilidades de UI
-    # ==================================================
+    
+    # Utilidades UI
     def _add_item(self, titulo, valor):
         cont = QFrame()
         cont.setObjectName("item")
@@ -112,7 +131,7 @@ class TabPerfilEst(QWidget):
         lbl_t = QLabel(titulo)
         lbl_v = QLabel(valor)
 
-        lbl_t.setMinimumWidth(300)
+        lbl_t.setMinimumWidth(320)
         lbl_v.setStyleSheet("font-weight:bold;")
 
         ly.addWidget(lbl_t)

@@ -79,15 +79,14 @@ class TabModelo(QWidget):
         self.setLayout(self.main_layout)
         self.aplicar_estilos()
 
-    # ==================================================
+    
     # Cargar modelo y datos
-    # ==================================================
+    
     def cargar_artifactos(self):
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         data_path = os.path.join(base_dir, "data", "dataset_eda.csv")
         self.df_ref = pd.read_csv(data_path)
 
-        # 🔹 Tasa de aprobación por colegio (APR = aprobado)
         self.tasa_por_colegio = (
             self.df_ref
             .groupby("NOMBRE_COLEGIO")["RESULTADO_FINAL"]
@@ -105,13 +104,11 @@ class TabModelo(QWidget):
 
         self.tasa_actual = 0.0
 
-    # ==================================================
+    
     # Crear inputs
-    # ==================================================
+    
     def crear_inputs(self):
         
-
-        # 🔹 Nombre del colegio (auxiliar)
         combo_colegio = QComboBox()
         colegios = sorted(
             self.df_ref["NOMBRE_COLEGIO"]
@@ -127,23 +124,21 @@ class TabModelo(QWidget):
         self.form.addRow(QLabel("Nombre del colegio"), combo_colegio)
         self.combo_colegio = combo_colegio  # no va al modelo
 
-        # 🔹 Variables reales del modelo
+        # Variables reales del modelo
         for col in self.columnas_modelo:
-            # ❌ VARIABLES QUE NO SE MUESTRAN
+            # VARIABLES QUE NO SE MUESTRAN
             if col in ["RESULTADO_FINAL", "AREA_CARRERA"]:
                 continue
 
             
-        # ❌ VARIABLES QUE NO SE MUESTRAN
+        # VARIABLES QUE NO SE MUESTRAN
             if col in ["RESULTADO_FINAL", "AREA_CARRERA"]:
                 continue
 
             if col == "TASA_APR_COLEGIO":
-                continue  # NO se muestra
+                continue  
 
             label = ETIQUETAS_COLUMNAS.get(col, col)
-
-
 
             if col == "ANIO_BACHILLERATO":
                 combo = QComboBox()
@@ -188,9 +183,9 @@ class TabModelo(QWidget):
             self.form.addRow(QLabel(label), combo)
             self.inputs[col] = combo
 
-    # ==================================================
+    
     # Actualizar tasa
-    # ==================================================
+    
     def actualizar_tasa_colegio(self, nombre):
         tasa = self.tasa_por_colegio.get(nombre)
         if tasa is not None:
@@ -204,9 +199,9 @@ class TabModelo(QWidget):
                 "Tasa de aprobación del colegio: No disponible"
             )
 
-    # ==================================================
+   
     # Predicción
-    # ==================================================
+   
     def predecir(self):
         try:
             datos = {}
@@ -215,37 +210,44 @@ class TabModelo(QWidget):
                 if widget.currentIndex() == -1:
                     raise ValueError(f"Seleccione un valor para {col}")
 
-                # Variables binarias
+                
                 if col in ["MAYOR_EDAD", "MIGRA_UNIVERSIDAD"]:
                     datos[col] = int(widget.currentData())
 
-                # Variables numéricas
                 elif col in NUMERICAS_MODELO:
                     datos[col] = float(widget.currentText())
 
-                # Categóricas
                 else:
                     datos[col] = widget.currentText()
 
-            # 👉 insertar tasa calculada automáticamente
+            
             datos["TASA_APR_COLEGIO"] = float(self.tasa_actual)
 
+            # Construir DataFrame
             df = pd.DataFrame([datos])
             df = df.reindex(columns=self.columnas_modelo, fill_value=0)
 
+            
             pred = self.modelo.predict(df)[0]
             proba = self.modelo.predict_proba(df)[0][1]
 
             self.mostrar_resultado(pred, proba)
 
+            
+            if hasattr(self, "tab_perfil") and hasattr(self, "tabs_widget"):
+                self.tab_perfil.actualizar_perfil(datos, proba)
+
+                
+                self.tabs_widget.setCurrentIndex(
+                    self.tabs_widget.indexOf(self.tab_perfil)
+                )
+
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 
-
-
-    # ==================================================
+    
     # Mostrar resultado
-    # ==================================================
+    
     def mostrar_resultado(self, pred, proba):
         if pred == 1:
             texto = "APROBADO ✅"
@@ -268,9 +270,8 @@ class TabModelo(QWidget):
             """
         )
 
-    # ==================================================
+    
     # Estilos
-    # ==================================================
     def aplicar_estilos(self):
         self.setStyleSheet("""
             QFrame#card {
@@ -296,3 +297,6 @@ class TabModelo(QWidget):
                 font-weight: bold;
             }
         """)
+    def set_tab_perfil(self, tab_perfil, tab_widget):
+        self.tab_perfil = tab_perfil
+        self.tab_widget = tab_widget
